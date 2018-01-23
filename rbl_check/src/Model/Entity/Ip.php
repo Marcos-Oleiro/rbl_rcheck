@@ -12,8 +12,6 @@ class Ip extends Entity {
     private $active;
     private $listed;
     private $service;
-    
-    
     protected $_accessible = [
         '*' => true
     ];
@@ -22,8 +20,8 @@ class Ip extends Entity {
         return $this->id;
     }
 
-    public function getIp() {
-        return $this->ip;
+    public function getIpv4() {
+        return $this->ipv4;
     }
 
     public function getIp_reverse() {
@@ -46,11 +44,11 @@ class Ip extends Entity {
         $this->id = $id;
     }
 
-    public function setIp($ip) {
-        $this->ip = $ip;
+    public function setIpv4($ipv4) {
+        $this->ipv4 = $ipv4;
     }
 
-    public function setIp_reverse($ip_reverse) {
+    function setIp_reverse($ip_reverse) {
         $this->ip_reverse = $ip_reverse;
     }
 
@@ -65,6 +63,7 @@ class Ip extends Entity {
     public function setUsage($usage) {
         $this->usage = $usage;
     }
+
 
 }
 

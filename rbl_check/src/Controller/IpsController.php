@@ -28,92 +28,53 @@ class IpsController extends AppController {
         $lines = $file_cake->read();
 
         // explode a string vinda da leitura do arquivo em um array. utilizando whithesoace como separador
-        $ip_list = preg_split("/\s+/", $lines);         // lista de ips do arquivo
-        array_pop($ip_list);                            // excluir último elemento, em branco. Obs : Por algum motivo, quando é preg_split é usado, ele tá criando um elemento vazio no fim do array, por isso o pop
-        $ip_reverse_list = $ip_list;                    // lista de ips reversos 
-        // Array de ips que já existiam no banco de dados, quando foi tentado inserir ips ao banco        
-        $duplicate_ips = array();
 
-        // Mensagem comunicando a falha ao tentar inserir o ip no banco de dados
-        $msg_fail = '';
+        $ip_list = preg_split("/\s+/", $lines);          // lista de ips do arquivo
 
-        // Mensagem comunicando o sucesso ao tentar inserir o ip no banco de dados
-        $msg_suc = '';
+        array_pop($ip_list);                             // excluir último elemento, em branco. Obs : Por algum motivo, quando é preg_split é usado, ele tá criando um elemento vazio no fim do array, por isso o pop
 
-        // Array de ips duplicado, para criar a mensagem
-        $ip_d = '';
-//        print_r($ip_list);exit();
-        // função para pegar a lista de ip reverso da lista dos ips.=> 187.86.129.3 vira 3.129.86.187
+        $duplicate_ips = array();                        // Array de ips que já existiam no banco de dados, quando foi tentado inserir ips ao banco        
 
-        for ($i = 0; $i < sizeof($ip_list); $i++) {
-            $str_aux = $ip_list[$i];
+        $msg_fail = '';                                  // Mensagem comunicando a falha ao tentar inserir o ip no banco de dados
 
-            $array_aux1 = explode(".", $str_aux);
-            $array_aux2 = $array_aux1;
+        $msg_suc = '';                                   // Mensagem comunicando o sucesso ao tentar inserir o ip no banco de dados
+        
+        $ip_d = '';                                      // Array de ips duplicado, para criar a mensagem
 
-            $array_aux2[0] = '';
-            $array_aux2[1] = '';
-            $array_aux2[2] = '';
-            $array_aux2[3] = '';
-
-            $array_aux2[0] = $array_aux1[3];
-            $array_aux2[1] = $array_aux1[2];
-            $array_aux2[2] = $array_aux1[1];
-            $array_aux2[3] = $array_aux1[0];
-
-            $ip_reverse_list[$i] = implode(".", $array_aux2);
-        }
-
-        $connection = ConnectionManager::get('default');
-
-        // função para instanciar objetos da classe IP e já salva no banco de dados cada objeto criado
 
         for ($j = 0; $j < sizeof($ip_list); $j++) {
 
-            $ipsTable = TableRegistry::get('Ips');
-            $ip = $ipsTable->newEntity();
+            $results = $this->insert_ip($ip_list[$j]);
 
-
-            $ip->ipv4 = $ip_list[$j];
-            $ip->ip_reverse = $ip_reverse_list[$j];
-            $ip->active = 0;
-            $ip->listed = 0;
-            $ip->service = 'nenhum';
-            
-            // Checa se o IP já existe dentro do banco de dados
-            $stmt = $connection->execute('Select ipv4 from ips where ipv4 = ?', [$ip->get('ipv4')])->fetchAll('assoc');
-
-            if ($ip->get('ipv4') == $stmt[0]['ipv4']) { // se existir, insere no array $duplicate_ips
-                array_push($duplicate_ips, $ip->get('ipv4'));
-            } else { // se não existir, ele insere no banco
-                $res = $ipsTable->save($ip);
-
-                if ($res) { // sucesso na inserção no banco
-                    $msg_suc = "Dados inseridos no banco de dados." . "<br>";
-                } else { // falha na inserção no banco
-                    $msg_fail = $msg_fail + "Erro ao salvar o ip: '.$ip->get('ipv4').'no banco de dados." . "<br>";
-                }
+            if ($results[0] != "") {
+                array_push($duplicate_ips, $results[0]);
             }
+
+            if ($results[1] != "") {
+                $msg_suc = $results[1];
+            }
+
+            if ($results[2] != "") {
+
+                $msg_fail = $msg_fail + $results[2];
+            }
+
         }
 
         // Prepara a mensagem que mostra os ip's duplicados, se houverem.
         if (sizeof($duplicate_ips) > 0) {
             for ($i = 0; $i < sizeof($duplicate_ips); $i++) {
-                
-                if ( $i== (sizeof($duplicate_ips) - 1) ) {
 
-                    $ip_d = $ip_d  . $duplicate_ips[$i];
+                if ($i == (sizeof($duplicate_ips) - 1)) {
 
+                    $ip_d = $ip_d . $duplicate_ips[$i];
+                } else {
+
+                    $ip_d = $ip_d . $duplicate_ips[$i] . '; ';
                 }
-                else{
-                    
-                    $ip_d = $ip_d  . $duplicate_ips[$i] . '; ';
-                }
-
             }
             $msg_duplicate_ips = 'Os seguintes IP\'s já estavam inseridos no banco de dados: ' . $ip_d . '.';
-        }
-        else{
+        } else {
             $msg_duplicate_ips = '';
         }
 
@@ -125,4 +86,59 @@ class IpsController extends AppController {
         $this->render();
     }
 
+    // função para pegar a lista de ip reverso da lista dos ips.=> 187.86.129.3 vira 3.129.86.187
+    public function make_reverse($ipv4) {
+
+        $array_aux1 = explode(".", $ipv4);
+        $array_aux2 = $array_aux1;
+
+        $array_aux2[0] = '';
+        $array_aux2[1] = '';
+        $array_aux2[2] = '';
+        $array_aux2[3] = '';
+
+        $array_aux2[0] = $array_aux1[3];
+        $array_aux2[1] = $array_aux1[2];
+        $array_aux2[2] = $array_aux1[1];
+        $array_aux2[3] = $array_aux1[0];
+
+        return implode(".", $array_aux2);
+    }
+
+    // função que pega a linha do ip, cria o objeto IP salva o ip no banco de dados, checan se já existe no banco de dados
+    public function insert_ip($ip_file) {
+
+        $ipsTable = TableRegistry::get('Ips');                                          // criando o objeto da Tabela, necessário para operações com banco de dados
+        $ip = $ipsTable->newEntity();                                                   // criando o objeto IP
+        $connection = ConnectionManager::get('default');                                // criando a conexão com o banco de dados
+        
+        $ip_duplicate = '';                                                             // variável para guardar o ip que já existia no banco de dados na hora de inserir
+        $msg_suc = '';                                                                  // mensagem de sucesso na inserção
+        $msg_fail = '';                                                                 // mensagem de falha na inserção
+
+        $ip->ipv4 = $ip_file;
+        $ip->ip_reverse = $this->make_reverse($ip->ipv4);
+        $ip->active = 0;
+        $ip->listed = 0;
+        $ip->service = 'nenhum';
+
+
+        // checa se o ip existe dentro do banco de dados
+        $stmt = $connection->execute('Select ipv4 from ips where ipv4 = ?', [$ip->get('ipv4')])->fetchAll('assoc');
+
+        if ($ip->get('ipv4') == $stmt[0]['ipv4']) { // se existir, insere no array de ips duplicados
+            $ip_duplicate = $ip->get('ipv4');
+        } else { // se ele não existir no banco, ele insere no banco
+            $res = $ipsTable->save($ip);
+
+            if ($res) { // sucesso na inserção no banco
+//                echo "entrou aqui"; exit();
+                $msg_suc = "Dados inseridos no banco de dados." . "<br>";
+            } else { // falha na inserção do banco
+                $msg_fail = "Erro ao salvar o ip: " . $ip->get('ipv4') . " no banco de dados." . "<br>";
+            }
+        }
+
+        return array($ip_duplicate, $msg_suc, $msg_fail);
+    }
 }
